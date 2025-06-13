@@ -87,13 +87,15 @@ LIMIT 1
 --2c. **Challenge Question:** Are there any specialties that appear in the prescriber table that have no associated prescriptions in the prescription table?
 
 SELECT  
-	  prescriber.npi--,specialty_description
+	  DISTINCT (prescriber.specialty_description)
 FROM prescriber
-  JOIN prescription
+LEFT JOIN prescription
 	ON prescriber.npi= prescription.npi
-	where prescriber.npi != prescription.npi
---WHERE prescriber.npi <> prescription.npi
+WHERE prescription.npi IS NULL
 
+--ANS Total rows=92
+
+	
 --3 a. Which drug (generic_name) had the highest total drug cost?
 --select distinct(drug_name) from prescription
 SELECT 
@@ -127,17 +129,17 @@ LIMIT 1
 --3b. Which drug (generic_name) has the hightest total cost per day? **Bonus: Round your cost per day column to 2 decimal places. Google ROUND to see how this works.**
 
 SELECT 
-	 DISTINCT(drug.generic_name)
-	,SUM (prescription.total_drug_cost) AS highest_drug_cost
+	 DISTINCT(drug.generic_name),ROUND((prescription.total_drug_cost/prescription.total_day_supply),2) AS drug_cost
 FROM drug
 JOIN prescription
 		USING (drug_name)
-GROUP BY drug.generic_name	
-ORDER BY highest_drug_cost DESC
+ORDER BY drug_cost DESC
 LIMIT 1
 
-
-
+/*
+"generic_name"	"drug_cost"
+"IMMUN GLOB G(IGG)/GLY/IGA OV50"	7141.11
+*/
 
 --4a. For each drug in the drug table, return the drug name and then a column named 'drug_type' which says 'opioid' for drugs which have opioid_drug_flag = 'Y', says 'antibiotic' for those drugs which have antibiotic_drug_flag = 'Y', and says 'neither' for all other drugs. **Hint:** You may want to use a CASE expression for this. See https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-case/ 
 
@@ -151,17 +153,46 @@ FROM drug
 --4b. Building off of the query you wrote for part a, determine whether more was spent (total_drug_cost) on opioids or on antibiotics. Hint: Format the total costs as MONEY for easier comparision.
 
 SELECT 
-	  drug_name
-	, CASE  WHEN opioid_drug_flag='Y' THEN 'opioid'
-	        WHEN antibiotic_drug_flag='Y' THEN 'antibiotic'
-	    	ELSE 'neither' END AS drug_type 
+		CASE 
+			WHEN (SUM(CASE  WHEN opioid_drug_flag='Y' THEN prescription.total_drug_cost  END) > SUM(CASE  WHEN antibiotic_drug_flag='Y' THEN prescription.total_drug_cost  END)) THEN 'Most money spent on opioid' ELSE 'Most money spent on antibiotic'  END,
+	 SUM(CASE  WHEN opioid_drug_flag='Y' THEN prescription.total_drug_cost  END) AS opioid_cost,
+	SUM(CASE  WHEN antibiotic_drug_flag='Y' THEN prescription.total_drug_cost  END) AS antibiotic_cost
+	
 FROM drug
  JOIN prescription
 	USING (drug_name)
-      CASE  WHEN DRUG_TYPE THEN SUM(prescription.total_drug_cost) END AS money
-	        --WHEN antibiotic_drug_flag='Y' THEN 'antibiotic'
-	    	--ELSE 'neither' END AS drug_type 
 
+	
+	    	 
+(
+SELECT
+	  SUM(prescription.total_drug_cost) AS money	
+	,'opioid' AS drugname
+FROM prescription 
+	JOIN drug 
+	  USING (drug_name)
+WHERE opioid_drug_flag='Y'
+)
+UNION
+(
+SELECT
+	  SUM(prescription.total_drug_cost) AS money
+	 ,'antibiotic'	AS drugname
+FROM 
+	prescription 
+	JOIN drug 
+	  USING (drug_name)
+WHERE antibiotic_drug_flag='Y'
+)
+ORDER BY money DESC
+
+/*
+"money"	"drugname"
+105080626.37	"opioid"
+38435121.26	"antibiotic"
+*/
+
+	
 --5a. How many CBSAs are in Tennessee? **Warning:** The cbsa table contains information for all states, not just Tennessee.
 SELECT 
 	COUNT(cbsaname) AS total_cbsa_tn
