@@ -197,12 +197,71 @@ ORDER BY money DESC
 SELECT 
 	COUNT(cbsaname) AS total_cbsa_tn
 FROM cbsa
-WHERE cbsaname ILIKE '%TN';
-
+WHERE cbsaname LIKE '%TN%';
+--select distinct cbsaname from cbsa where cbsaname like '%TN%'
 /*
 "total_cbsa_tn"
-33
+56
 */
 
 --5b. Which cbsa has the largest combined population? Which has the smallest? Report the CBSA name and total population.
-SELECT distinct(fipscounty) from cbsa
+SELECT 
+	  cbsa.cbsaname
+	, SUM(population) AS total_population
+FROM cbsa
+JOIN population
+	ON cbsa.fipscounty = population.fipscounty
+GROUP BY cbsa.cbsaname
+ORDER BY total_population DESC
+
+
+/*"cbsaname"	"total_population"
+"Nashville-Davidson--Murfreesboro--Franklin, TN"	1830410
+"Morristown, TN"	116352*/
+
+select distinct(cbsaname) from cbsa
+
+--6a. Find all rows in the prescription table where total_claims is at least 3000. Report the drug_name and the total_claim_count.
+
+SELECT 
+	 drug_name
+	,SUM(total_claim_count)
+FROM prescription
+WHERE total_claim_count >= 3000
+GROUP BY drug_name
+
+--select * from prescription
+
+
+--6b. For each instance that you found in part a, add a column that indicates whether the drug is an opioid.
+
+SELECT 
+	 prescription.drug_name
+	,SUM(total_claim_count)
+	,CASE 
+	    WHEN opioid_drug_flag = 'Y' THEN 'opioid'
+		ELSE 'not opioid' END AS drugtype
+FROM prescription
+JOIN drug
+	ON prescription.drug_name = drug.drug_name
+WHERE total_claim_count >= 3000
+GROUP BY prescription.drug_name,opioid_drug_flag
+
+-- 6c. Add another column to you answer from the previous part which gives the prescriber first and last name associated with each row.
+
+SELECT 
+	 prescription.drug_name,prescription.npi
+	,SUM(total_claim_count)
+	,CASE 
+	    WHEN opioid_drug_flag = 'Y' THEN 'opioid'
+		ELSE 'not opioid' END AS drugtype
+	,CASE
+	 	WHEN prescription.npi = pbr.npi THEN pbr.nppes_provider_first_name--,pbr.nppes_provider_last_org_name
+	    END AS prescribername
+FROM prescription
+JOIN drug
+	ON prescription.drug_name = drug.drug_name
+JOIN prescriber AS pbr
+	ON prescription.npi = pbr.npi
+WHERE total_claim_count >= 3000
+GROUP BY prescription.drug_name,opioid_drug_flag,prescription.npi,pbr.npi,pbr.nppes_provider_first_name--,pbr.nppes_provider_last_org_name
