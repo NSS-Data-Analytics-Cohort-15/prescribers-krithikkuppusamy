@@ -95,6 +95,21 @@ WHERE prescription.npi IS NULL
 
 --ANS Total rows=92
 
+--2d. **Difficult Bonus:** *Do not attempt until you have solved all other problems!* For each specialty, report the percentage of total claims by that specialty which are for opioids. Which specialties have a high percentage of opioids?
+
+SELECT 
+	 specialty_description
+	,ROUND(AVG(total_claim_count),2) AS avg_total_claim
+FROM prescription
+JOIN prescriber USING (npi)
+JOIN drug 
+	ON prescription.drug_name=drug.drug_name
+		AND opioid_drug_flag ILIKE 'Y'
+--WHERE opioid_drug_flag ILIKE 'Y'
+GROUP BY 
+	 specialty_description 
+ORDER BY avg_total_claim DESC	 
+LIMIT 1
 	
 --3 a. Which drug (generic_name) had the highest total drug cost?
 --select distinct(drug_name) from prescription
@@ -221,7 +236,13 @@ ORDER BY total_population DESC
 
 --5c. What is the largest (in terms of population) county which is not included in a CBSA? Report the county name and population.
 
-select distinct(cbsaname) from cbsa
+SELECT county,population
+FROM fips_county
+LEFT JOIN cbsa
+  ON fips_county.fipscounty=cbsa.fipscounty
+JOIN population
+  ON fips_county.fipscounty=population.fipscounty
+ WHERE fips_county IS NOT NULL
 
 --6a. Find all rows in the prescription table where total_claims is at least 3000. Report the drug_name and the total_claim_count.
 
