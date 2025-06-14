@@ -144,16 +144,18 @@ LIMIT 1
 --3b. Which drug (generic_name) has the hightest total cost per day? **Bonus: Round your cost per day column to 2 decimal places. Google ROUND to see how this works.**
 
 SELECT 
-	 DISTINCT(drug.generic_name),ROUND((prescription.total_drug_cost/prescription.total_day_supply),2) AS drug_cost
+	 drug.generic_name
+	,ROUND((SUM(prescription.total_drug_cost)/SUM(prescription.total_day_supply)),2) AS drug_cost
 FROM drug
 JOIN prescription
 		USING (drug_name)
+GROUP BY drug.generic_name
 ORDER BY drug_cost DESC
 LIMIT 1
 
 /*
 "generic_name"	"drug_cost"
-"IMMUN GLOB G(IGG)/GLY/IGA OV50"	7141.11
+"C1 ESTERASE INHIBITOR"	3495.22
 */
 
 --4a. For each drug in the drug table, return the drug name and then a column named 'drug_type' which says 'opioid' for drugs which have opioid_drug_flag = 'Y', says 'antibiotic' for those drugs which have antibiotic_drug_flag = 'Y', and says 'neither' for all other drugs. **Hint:** You may want to use a CASE expression for this. See https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-case/ 
@@ -169,9 +171,9 @@ FROM drug
 
 SELECT 
 		CASE 
-			WHEN (SUM(CASE  WHEN opioid_drug_flag='Y' THEN prescription.total_drug_cost  END) > SUM(CASE  WHEN antibiotic_drug_flag='Y' THEN prescription.total_drug_cost  END)) THEN 'Most money spent on opioid' ELSE 'Most money spent on antibiotic'  END,
-	 CAST (SUM(CASE  WHEN opioid_drug_flag='Y' THEN prescription.total_drug_cost  END) AS money)AS opioid_cost,
-	 CAST (SUM(CASE  WHEN antibiotic_drug_flag='Y' THEN prescription.total_drug_cost  END)AS money) AS antibiotic_cost
+			WHEN (SUM(CASE  WHEN opioid_drug_flag='Y' THEN prescription.total_drug_cost  END) > SUM(CASE  WHEN antibiotic_drug_flag='Y' THEN prescription.total_drug_cost  END)) THEN 'Most money spent on opioid' ELSE 'Most money spent on antibiotic'  END
+	 ,CAST (SUM(CASE  WHEN opioid_drug_flag='Y' THEN prescription.total_drug_cost  END) AS money)AS opioid_cost
+	 ,CAST (SUM(CASE  WHEN antibiotic_drug_flag='Y' THEN prescription.total_drug_cost  END)AS money) AS antibiotic_cost
 	
 FROM drug
  JOIN prescription
@@ -179,7 +181,9 @@ FROM drug
 
 /*
 "Most money spent on opioid"	"$105,080,626.37"	"$38,435,121.26"	
-*/	    	 
+*/	 
+
+					--Alternate to 4b
 (
 SELECT
 	  CAST(SUM(prescription.total_drug_cost)AS money) AS money	
@@ -210,14 +214,27 @@ ORDER BY money DESC
 	
 --5a. How many CBSAs are in Tennessee? **Warning:** The cbsa table contains information for all states, not just Tennessee.
 SELECT 
-	COUNT(cbsaname) AS total_cbsa_tn
+	COUNT(DISTINCT cbsa) AS total_cbsa_tn
 FROM cbsa
 WHERE cbsaname LIKE '%TN%';
 --select distinct cbsaname from cbsa where cbsaname like '%TN%'
 /*
 "total_cbsa_tn"
-56
+10
 */
+            --Alternate to 5a
+SELECT 
+	COUNT(DISTINCT cbsaname) AS total_cbsa_tn
+FROM cbsa
+JOIN fips_county
+ 	USING(fipscounty)
+WHERE state LIKE 'TN';
+
+/*
+"total_cbsa_tn"
+10
+*/
+
 
 --5b. Which cbsa has the largest combined population? Which has the smallest? Report the CBSA name and total population.
 SELECT 
@@ -231,19 +248,42 @@ ORDER BY total_population DESC
 
 
 /*"cbsaname"	"total_population"
-"Nashville-Davidson--Murfreesboro--Franklin, TN"	1830410
-"Morristown, TN"	116352*/
+"LARGEST : Nashville-Davidson--Murfreesboro--Franklin, TN"	1830410
+"SMALLEST :Morristown, TN"	116352*/
+
+
+                 --alternate to 5b
+(SELECT 
+	  cbsa.cbsaname
+	, SUM(population) AS total_population
+FROM cbsa
+JOIN population
+	ON cbsa.fipscounty = population.fipscounty
+GROUP BY cbsa.cbsaname
+ORDER BY total_population 
+LIMIT 1)
+UNION
+(SELECT 
+	  cbsa.cbsaname
+	, SUM(population) AS total_population
+FROM cbsa
+JOIN population
+	ON cbsa.fipscounty = population.fipscounty
+GROUP BY cbsa.cbsaname
+ORDER BY total_population DESC
+LIMIT 1)
 
 --5c. What is the largest (in terms of population) county which is not included in a CBSA? Report the county name and population.
 
-SELECT county,population
+SELECT  county,population
 FROM fips_county
 LEFT JOIN cbsa
   ON fips_county.fipscounty=cbsa.fipscounty
 JOIN population
   ON fips_county.fipscounty=population.fipscounty
- WHERE fips_county IS NOT NULL
-
+ WHERE cbsa.fipscounty IS  NULL
+ORDER BY population DESC
+ 
 --6a. Find all rows in the prescription table where total_claims is at least 3000. Report the drug_name and the total_claim_count.
 
 SELECT 
@@ -316,10 +356,12 @@ WHERE specialty_description = 'Pain Management' AND nppes_provider_city = 'NASHV
  
 --7c. Finally, if you have not done so already, fill in any missing values for total_claim_count with 0. Hint - Google the COALESCE function.
 
-SELECT prescriber.npi,drug.drug_name,COALESCE (total_claim_count,0)--,SUM(prescription.total_claim_count) AS total_claims
+SELECT
+	 prescriber.npi,drug.drug_name
+	,COALESCE (total_claim_count,0)--,SUM(prescription.total_claim_count) AS total_claims
 FROM prescriber
-CROSS JOIN drug
- LEFT JOIN prescription
+CROSS JOIN drug -- Cross join doesnt need ON statement
+LEFT JOIN prescription
 	ON drug.drug_name=prescription.drug_name
   AND prescription.npi = prescriber.npi
 	WHERE specialty_description = 'Pain Management' AND nppes_provider_city = 'NASHVILLE' AND drug.opioid_drug_flag = 'Y'
